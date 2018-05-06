@@ -138,7 +138,10 @@ if ~exist(conf.modelPath) || conf.clobber
     featuresTrain = hists(:, randomPerm);
     featuresTrain = transpose(featuresTrain);
  
-    classifier = fitcecoc(featuresTrain, YTrain, 'Verbose', 2);
+    t = templateSVM('KernelFunction', 'polynomial');
+    opt = statset('UseParallel',true);
+    svm = fitcecoc(featuresTrain, YTrain, 'Coding', 'onevsall', ...
+        'Learners',t, 'Options',opt, 'Prior','uniform', 'Verbose', 2);
     
     testPerm = randperm(length(selTest));
     testRandomPerm = selTest(testPerm); 
@@ -147,8 +150,8 @@ if ~exist(conf.modelPath) || conf.clobber
     featuresTest = hists(:, testRandomPerm);
     featuresTest = transpose(featuresTest);
     
-    YPred = predict(classifier,featuresTest);
-    
+    YPred = predict(svm, featuresTest);
+    YPred = YPred';
     occurences = 0;
     for i = 1: length(YPred)
         if (YPred(i) == YTest(i))
@@ -157,4 +160,8 @@ if ~exist(conf.modelPath) || conf.clobber
     end
     
     accuracy = occurences/length(YPred);
+    
+    confus = confusionmat(YTest,YPred);
+    
+    heatmap(confus);
 end
