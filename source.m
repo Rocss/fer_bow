@@ -1,5 +1,5 @@
 
-conf.clobber = 0;
+conf.clobber = 1;
 conf.calDir = 'data/training';
 conf.testDir = 'data/publicTest';
 conf.resultsDir = 'results/' ;
@@ -16,7 +16,7 @@ conf.randSeed = 1;
 conf.vocabPath = fullfile(conf.resultsDir, 'vocab.mat') ;
 conf.histPath = fullfile(conf.resultsDir, 'hists.mat') ;
 conf.modelPath = fullfile(conf.resultsDir, 'model.mat') ;
-conf.resultPath = fullfile(conf.resultsDir, 'result') ;
+conf.confPath = fullfile(conf.resultsDir, 'conf.mat') ;
 
 randn('state', conf.randSeed) ;
 rand('state', conf.randSeed) ;
@@ -35,6 +35,7 @@ img_index = 0;
 
 selTrain = [];
 selTest = [];
+selTrainFeats = [];
 
 for ci = 1:length(classes)
   ims = dir(fullfile(conf.calDir, classes{ci}, '*.png'))' ;
@@ -45,6 +46,8 @@ for ci = 1:length(classes)
 
   images = {images{:}, ims{:}, testIms{:}};
   imageClass{end+1} = ci * ones(1,length(ims) + length(testIms)) ;
+  
+  selTrainFeats = [selTrainFeats, img_index + 1:img_index + 10];
   
   for i = 1:length(ims)
       img_index = img_index + 1;
@@ -68,9 +71,10 @@ imageClass = cat(2, imageClass{:}) ;
 
 if ~exist(conf.vocabPath) || conf.clobber
   % Get some PHOW descriptors to train the dictionary
-  selTrainFeats = vl_colsubset(selTrain, 30) ;
+%   selTrainFeats = vl_colsubset(selTrain, 30) ;
   descriptors = {} ;
- 
+  selTrainFeats = selTrainFeats(randperm(length(selTrainFeats)));
+  
   for index = 1:length(selTrainFeats)
 
     im = imread(fullfile(conf.calDir, images{selTrainFeats(index)})) ;
@@ -80,11 +84,13 @@ if ~exist(conf.vocabPath) || conf.clobber
     descriptors{index} = descrs;
   end
 
+
   descriptors = vl_colsubset(cat(2, descriptors{:}), 10e4) ;
   descriptors = single(descriptors) ;
 
   % Quantize the descriptors to get the visual words
-  vocab = vl_kmeans(descriptors, conf.numWords, 'verbose', 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
+  vocab = vl_kmeans(descriptors, conf.numWords, 'verbose', 'algorithm', ... 
+      'elkan', 'MaxNumIterations', 50) ;
   save(conf.vocabPath, 'vocab') ;
 else
   load(conf.vocabPath) ;
@@ -96,13 +102,15 @@ if strcmp(conf.quantizer, 'kdtree')
   conf.kdtree = vl_kdtreebuild(vocab) ;
 end
 
+save(conf.confPath, 'conf') ;
+
 % --------------------------------------------------------------------
 %                                           Compute spatial histograms
 % --------------------------------------------------------------------
 
 if ~exist(conf.histPath) || conf.clobber
   hists = {} ;
-  for ii = 1:length(images)
+  parfor ii = 1:length(images)
   % for ii = 1:length(images)
     fprintf('Processing %s (%.2f %%)\n', images{ii}, 100 * ii / length(images)) ;
     try
