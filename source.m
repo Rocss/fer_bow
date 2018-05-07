@@ -5,9 +5,9 @@ conf.testDir = 'data/publicTest';
 conf.resultsDir = 'results/' ;
 conf.numClasses = 7;
 conf.numTest = zeros(1, conf.numClasses);
-conf.numWords = 2500;
-conf.numSpatialX = 3;
-conf.numSpatialY = 3;
+conf.numWords = 4000;
+conf.numSpatialX = 1;
+conf.numSpatialY = 1;
 conf.quantizer = 'kdtree';
 
 conf.phowOpts = {'ContrastThreshold', 0.015, 'step', 1, 'sizes', [2, 4, 6, 8]};
@@ -41,7 +41,7 @@ for ci = 1:length(classes)
   ims = dir(fullfile(conf.calDir, classes{ci}, '*.png'))' ;
   ims = cellfun(@(x)fullfile(classes{ci},x),{ims.name},'UniformOutput',false) ;
   
-%   ims = vl_colsubset(ims, uint8(length(ims) * 0.5));
+%   ims = vl_colsubset(ims, 30);
 
   testIms = dir(fullfile(conf.testDir, classes{ci}, '*.png'))' ;
   testIms = cellfun(@(x)fullfile(classes{ci},x),{testIms.name},'UniformOutput',false) ;
@@ -134,10 +134,13 @@ if ~exist(conf.modelPath) || conf.clobber
     featuresTrain = hists(:, randomPerm);
     featuresTrain = transpose(featuresTrain);
  
-    t = templateSVM('KernelFunction', 'polynomial');
+    tTree = templateTree('surrogate','on');
+    tEnsemble = templateEnsemble('GentleBoost',100,tTree);
+
     opt = statset('UseParallel',true);
     svm = fitcecoc(featuresTrain, YTrain, 'Coding', 'onevsall', ...
-        'Learners',t, 'Options',opt, 'Verbose', 2);
+        'Learners',tEnsemble, 'Prior', [1/7, 1/7, 1/7, 1/7, 1/7, 1/7, 1/7], ... 
+        'Options',opt, 'Verbose', 2);
     
     testPerm = randperm(length(selTest));
     testRandomPerm = selTest(testPerm); 
@@ -159,10 +162,14 @@ if ~exist(conf.modelPath) || conf.clobber
     
     confus = confusionmat(YTest,YPred);
     
+    for i = 1:size(confus, 1)
+        confus(i, :) = confus(i, :)/ sum(confus(i, :));
+    end
+    
     heatmap(confus);
 
     % imagesc(confus); colorbar;
-%     
+    
 %     save(conf.modelPath, 'svm');
 %     save(conf.confPath, 'conf'); 
 %     save(conf.histPath, 'hists') ;
