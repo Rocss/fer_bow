@@ -19,5 +19,9 @@ function hist = getImageDescriptor(conf, im)
     bins = sub2ind([conf.numSpatialY, conf.numSpatialX, conf.numWords], binsy,binsx,binsa) ;
     hist = zeros(conf.numSpatialY * conf.numSpatialX * conf.numWords, 1);
     hist = vl_binsum(hist, ones(size(bins)), bins);
+    
+    % histogram to presence vector
+    hist = hist ~= 0;
+  
     hist = single(hist / sum(hist)) ;
 end

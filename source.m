@@ -1,13 +1,13 @@
 
-conf.clobber = 0;
+conf.clobber = 1;
 conf.calDir = 'data/training';
 conf.testDir = 'data/publicTest';
 conf.resultsDir = 'results/' ;
 conf.numClasses = 7;
 conf.numTest = zeros(1, conf.numClasses);
-conf.numWords = 2300;
-conf.numSpatialX = 1;
-conf.numSpatialY = 1;
+conf.numWords = 2500;
+conf.numSpatialX = 3;
+conf.numSpatialY = 3;
 conf.quantizer = 'kdtree';
 
 conf.phowOpts = {'ContrastThreshold', 0.015, 'step', 1, 'sizes', [2, 4, 6, 8]};
@@ -16,7 +16,7 @@ conf.randSeed = 1;
 conf.vocabPath = fullfile(conf.resultsDir, 'vocab.mat') ;
 conf.histPath = fullfile(conf.resultsDir, 'hists.mat') ;
 conf.modelPath = fullfile(conf.resultsDir, 'model.mat') ;
-conf.resultPath = fullfile(conf.resultsDir, 'result') ;
+conf.confPath = fullfile(conf.resultsDir, 'conf.mat') ;
 
 randn('state', conf.randSeed) ;
 rand('state', conf.randSeed) ;
@@ -35,16 +35,21 @@ img_index = 0;
 
 selTrain = [];
 selTest = [];
+selTrainFeats = [];
 
 for ci = 1:length(classes)
   ims = dir(fullfile(conf.calDir, classes{ci}, '*.png'))' ;
   ims = cellfun(@(x)fullfile(classes{ci},x),{ims.name},'UniformOutput',false) ;
   
+%   ims = vl_colsubset(ims, uint8(length(ims) * 0.5));
+
   testIms = dir(fullfile(conf.testDir, classes{ci}, '*.png'))' ;
   testIms = cellfun(@(x)fullfile(classes{ci},x),{testIms.name},'UniformOutput',false) ;
 
   images = {images{:}, ims{:}, testIms{:}};
   imageClass{end+1} = ci * ones(1,length(ims) + length(testIms)) ;
+  
+  selTrainFeats = [selTrainFeats, img_index + 1:img_index + 10];
   
   for i = 1:length(ims)
       img_index = img_index + 1;
@@ -57,7 +62,7 @@ for ci = 1:length(classes)
       conf.numTest(1, ci) = length(testIms);
   end
 end
-
+ceva = imageClass;
 imageClass = cat(2, imageClass{:}) ;
 
 
@@ -68,7 +73,7 @@ imageClass = cat(2, imageClass{:}) ;
 
 if ~exist(conf.vocabPath) || conf.clobber
   % Get some PHOW descriptors to train the dictionary
-  selTrainFeats = vl_colsubset(selTrain, 30) ;
+%   selTrainFeats = vl_colsubset(selTrain, 30) ;
   descriptors = {} ;
  
   for index = 1:length(selTrainFeats)
@@ -85,7 +90,6 @@ if ~exist(conf.vocabPath) || conf.clobber
 
   % Quantize the descriptors to get the visual words
   vocab = vl_kmeans(descriptors, conf.numWords, 'verbose', 'algorithm', 'elkan', 'MaxNumIterations', 50) ;
-  save(conf.vocabPath, 'vocab') ;
 else
   load(conf.vocabPath) ;
 end
@@ -114,17 +118,9 @@ if ~exist(conf.histPath) || conf.clobber
   end
 
   hists = cat(2, hists{:}) ;
-  save(conf.histPath, 'hists') ;
 else
   load(conf.histPath) ;
 end
-
-% % --------------------------------------------------------------------
-% %                                                  Compute feature map
-% % --------------------------------------------------------------------
-% 
-% psix = vl_homkermap(hists, 1, 'kchi2', 'gamma', .5) ;
-
 
 % --------------------------------------------------------------------
 %                                                            Train SVM
@@ -141,7 +137,7 @@ if ~exist(conf.modelPath) || conf.clobber
     t = templateSVM('KernelFunction', 'polynomial');
     opt = statset('UseParallel',true);
     svm = fitcecoc(featuresTrain, YTrain, 'Coding', 'onevsall', ...
-        'Learners',t, 'Options',opt, 'Prior','uniform', 'Verbose', 2);
+        'Learners',t, 'Options',opt, 'Verbose', 2);
     
     testPerm = randperm(length(selTest));
     testRandomPerm = selTest(testPerm); 
@@ -164,4 +160,12 @@ if ~exist(conf.modelPath) || conf.clobber
     confus = confusionmat(YTest,YPred);
     
     heatmap(confus);
+
+    % imagesc(confus); colorbar;
+%     
+%     save(conf.modelPath, 'svm');
+%     save(conf.confPath, 'conf'); 
+%     save(conf.histPath, 'hists') ;
+%     save(conf.vocabPath, 'vocab') ;
+
 end
